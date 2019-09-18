@@ -35,7 +35,10 @@ if (authRequired()) {
 <% end -%>
     var prev_db = db
     db = db.getSiblingDB('admin')
-    db.auth('<%= @admin_username %>', '<%= @admin_password %>')
+    var a = db.auth('<%= @admin_username %>', '<%= @admin_password %>');
+    if (a == 0) {
+      db.auth('<%= @router_admin_username %>', '<%= @router_admin_password %>')
+    }
     db = db.getSiblingDB(prev_db)
   }
   catch (err) {

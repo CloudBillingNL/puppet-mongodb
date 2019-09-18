@@ -26,6 +26,8 @@ class mongodb::server::config {
   $create_admin     = $mongodb::server::create_admin
   $admin_username   = $mongodb::server::admin_username
   $admin_password   = $mongodb::server::admin_password
+  $router_admin_username = lookup('mongodb::server::router_admin_username')
+  $router_admin_password = lookup('mongodb::server::router_admin_password')
   $handle_creds     = $mongodb::server::handle_creds
   $store_creds      = $mongodb::server::store_creds
   $rcfile           = $mongodb::server::rcfile
