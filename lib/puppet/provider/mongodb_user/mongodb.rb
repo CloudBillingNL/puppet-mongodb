@@ -7,41 +7,36 @@ Puppet::Type.type(:mongodb_user).provide(:mongodb, parent: Puppet::Provider::Mon
   def self.instances
     require 'json'
 
-    if db_ismaster
-      if mongo_24?
-        dbs = JSON.parse mongo_eval('printjson(db.getMongo().getDBs()["databases"].map(function(db){return db["name"]}))') || 'admin'
+    if mongo_24?
+      dbs = JSON.parse mongo_eval('printjson(db.getMongo().getDBs()["databases"].map(function(db){return db["name"]}))') || 'admin'
 
-        allusers = []
+      allusers = []
 
-        dbs.each do |db|
-          users = JSON.parse mongo_eval('printjson(db.system.users.find().toArray())', db)
+      dbs.each do |db|
+        users = JSON.parse mongo_eval('printjson(db.system.users.find().toArray())', db)
 
-          allusers += users.map do |user|
-            new(name: user['_id'],
-                ensure: :present,
-                username: user['user'],
-                database: db,
-                roles: user['roles'].sort,
-                password_hash: user['pwd'])
-          end
-        end
-        return allusers
-      else
-        users = JSON.parse mongo_eval('printjson(db.system.users.find().toArray())')
-
-        users.map do |user|
+        allusers += users.map do |user|
           new(name: user['_id'],
               ensure: :present,
               username: user['user'],
-              database: user['db'],
-              roles: from_roles(user['roles'], user['db']),
-              password_hash: user['credentials']['MONGODB-CR'],
-              scram_credentials: user['credentials']['SCRAM-SHA-1'])
+              database: db,
+              roles: user['roles'].sort,
+              password_hash: user['pwd'])
         end
       end
+      return allusers
     else
-      Puppet.warning 'User info is available only from master host'
-      return []
+      users = JSON.parse mongo_eval('printjson(db.system.users.find().toArray())')
+
+      users.map do |user|
+        new(name: user['_id'],
+            ensure: :present,
+            username: user['user'],
+            database: user['db'],
+            roles: from_roles(user['roles'], user['db']),
+            password_hash: user['credentials']['MONGODB-CR'],
+            scram_credentials: user['credentials']['SCRAM-SHA-1'])
+      end
     end
   end
 
