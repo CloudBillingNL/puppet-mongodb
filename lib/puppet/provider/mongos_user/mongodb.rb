@@ -58,50 +58,42 @@ Puppet::Type.type(:mongos_user).provide(:mongodb, :parent => Puppet::Provider::M
   mk_resource_methods
 
   def create
-    if db_ismaster('localhost:27017')
-      if mongo_24?
-        user = {
-          :user => @resource[:username],
-          :pwd => @resource[:password_hash],
-          :roles => to_roles(@resource[:roles])
-        }
+    if mongo_24?
+      user = {
+        :user => @resource[:username],
+        :pwd => @resource[:password_hash],
+        :roles => to_roles(@resource[:roles])
+      }
 
-        mongo_eval("db.addUser(#{user.to_json})", @resource[:database], 10, 'localhost:27017')
-      else
-        Puppet.warning "Creating User"
-        cmd_json=<<-EOS.gsub(/^\s*/, '').gsub(/$\n/, '')
-        {
-          "createUser": "#{@resource[:username]}",
-          "pwd": "#{@resource[:password_hash]}",
-          "customData": {"createdBy": "Puppet Mongodb_user['#{@resource[:name]}']"},
-          "roles": #{to_roles(@resource[:roles]).to_json},
-          "digestPassword": false
-        }
-        EOS
-
-        mongo_eval("db.runCommand(#{cmd_json})", @resource[:database], 10, 'localhost:27017')
-      end
-
-      @property_hash[:ensure] = :present
-      @property_hash[:username] = @resource[:username]
-      @property_hash[:database] = @resource[:database]
-      @property_hash[:password_hash] = ''
-      @property_hash[:roles] = @resource[:roles]
-
-      exists? ? (return true) : (return false)
+      mongo_eval("db.addUser(#{user.to_json})", @resource[:database], 10, 'localhost:27017')
     else
-      Puppet.warning 'User creation is available only from master host'
+      Puppet.warning "Creating User"
+      cmd_json=<<-EOS.gsub(/^\s*/, '').gsub(/$\n/, '')
+      {
+        "createUser": "#{@resource[:username]}",
+        "pwd": "#{@resource[:password_hash]}",
+        "customData": {"createdBy": "Puppet Mongodb_user['#{@resource[:name]}']"},
+        "roles": #{to_roles(@resource[:roles]).to_json},
+        "digestPassword": false
+      }
+      EOS
+
+      mongo_eval("db.runCommand(#{cmd_json})", @resource[:database], 10, 'localhost:27017')
     end
+
+    @property_hash[:ensure] = :present
+    @property_hash[:username] = @resource[:username]
+    @property_hash[:database] = @resource[:database]
+    @property_hash[:password_hash] = ''
+    @property_hash[:roles] = @resource[:roles]
+
+    exists? ? (return true) : (return false)
   end
 
 
   def destroy
-    if db_ismaster('localhost:27017')
-      if mongo_24?
-        mongo_eval("db.removeUser('#{@resource[:username]}')", 'admin', 10, 'localhost:27017')
-      else
-        mongo_eval("db.dropUser('#{@resource[:username]}')", 'admin', 10, 'localhost:27017')
-      end
+    if mongo_24?
+      mongo_eval("db.removeUser('#{@resource[:username]}')", 'admin', 10, 'localhost:27017')
     else
       mongo_eval("db.dropUser('#{@resource[:username]}')", 'admin', 10, 'localhost:27017')
     end
@@ -112,37 +104,29 @@ Puppet::Type.type(:mongos_user).provide(:mongodb, :parent => Puppet::Provider::M
   end
 
   def password_hash=(value)
-    if db_ismaster('localhost:27017')
-      cmd_json=<<-EOS.gsub(/^\s*/, '').gsub(/$\n/, '')
-      {
-          "updateUser": "#{@resource[:username]}",
-          "pwd": "#{@resource[:password_hash]}",
-          "digestPassword": false
-      }
-      EOS
-      mongo_eval("db.runCommand(#{cmd_json})", @resource[:database], 10, 'localhost:27017')
-    else
-      Puppet.warning 'User password operations are available only from master host'
-    end
+    cmd_json=<<-EOS.gsub(/^\s*/, '').gsub(/$\n/, '')
+    {
+        "updateUser": "#{@resource[:username]}",
+        "pwd": "#{@resource[:password_hash]}",
+        "digestPassword": false
+    }
+    EOS
+    mongo_eval("db.runCommand(#{cmd_json})", @resource[:database], 10, 'localhost:27017')
   end
 
   def roles=(roles)
-    if db_ismaster('localhost:27017')
-      if mongo_24?
-        mongo_eval("db.system.users.update({user:'#{@resource[:username]}'}, { $set: {roles: #{to_roles(@resource[:roles]).to_json}}})", 'admin', 10, 'localhost:27017')
-      else
-        grant = roles-@property_hash[:roles]
-        if grant.length > 0
-          mongo_eval("db.getSiblingDB('#{@resource[:database]}').grantRolesToUser('#{@resource[:username]}', #{to_roles(grant).to_json})", 'admin', 10, 'localhost:27017')
-        end
-
-        revoke = @property_hash[:roles]-roles
-        if revoke.length > 0
-          mongo_eval("db.getSiblingDB('#{@resource[:database]}').revokeRolesFromUser('#{@resource[:username]}', #{to_roles(revoke).to_json})", 'admin', 10, 'localhost:27017')
-        end
-      end
+    if mongo_24?
+      mongo_eval("db.system.users.update({user:'#{@resource[:username]}'}, { $set: {roles: #{to_roles(@resource[:roles]).to_json}}})", 'admin', 10, 'localhost:27017')
     else
-      Puppet.warning 'User roles operations are available only from master host'
+      grant = roles-@property_hash[:roles]
+      if grant.length > 0
+        mongo_eval("db.getSiblingDB('#{@resource[:database]}').grantRolesToUser('#{@resource[:username]}', #{to_roles(grant).to_json})", 'admin', 10, 'localhost:27017')
+      end
+
+      revoke = @property_hash[:roles]-roles
+      if revoke.length > 0
+        mongo_eval("db.getSiblingDB('#{@resource[:database]}').revokeRolesFromUser('#{@resource[:username]}', #{to_roles(revoke).to_json})", 'admin', 10, 'localhost:27017')
+      end
     end
   end
 
