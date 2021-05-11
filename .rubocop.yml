@@ -1,5 +1,6 @@
 require: rubocop-rspec
 AllCops:
+# Puppet Server 5 defaults to jruby 1.7 so TargetRubyVersion must stay at 1.9 until we drop support for puppet 5
   TargetRubyVersion: 1.9
   Include:
     - ./**/*.rb
@@ -527,6 +528,9 @@ RSpec/RepeatedDescription:
 RSpec/NestedGroups:
   Enabled: False
 
+RSpec/MultipleExpectations:
+  Enabled: false
+
 # this is broken on ruby1.9
 Layout/IndentHeredoc:
   Enabled: False
@@ -543,6 +547,3 @@ Style/FormatStringToken:
 # are located.
 RSpec/FilePath:
   Enabled: false
-
-RSpec/MessageSpies:
-  EnforcedStyle: receive

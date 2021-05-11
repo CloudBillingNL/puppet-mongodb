@@ -60,6 +60,16 @@ configdb = 127.0.0.1:27019
         it { is_expected.to contain_service('mongos') }
       end
 
+      describe 'with specific bind_ip values' do
+        let :params do
+          {
+            bind_ip: ['127.0.0.1', '10.1.1.13']
+          }
+        end
+
+        it { is_expected.to contain_file(config_file).with_content(%r{^bind_ip = 127\.0\.0\.1\,10\.1\.1\.13$}) }
+      end
+
       context 'package_name => mongo-foo' do
         let(:params) do
           {
@@ -132,6 +142,6 @@ configdb = 127.0.0.1:27019
       { osfamily: 'Solaris' }
     end
 
-    it { expect { is_expected.to raise_error(Puppet::Error) } }
+    it { is_expected.to compile.and_raise_error(%r{is not applicable to an Undef Value}) }
   end
 end

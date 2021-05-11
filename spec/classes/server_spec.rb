@@ -56,7 +56,7 @@ describe 'mongodb::server' do
           it { is_expected.to contain_file(config_file).with_content(%r{^  fork: true$}) }
         end
 
-        it { is_expected.to contain_file('/root/.mongorc.js').with_ensure('absent') }
+        it { is_expected.to contain_file('/root/.mongorc.js').with_ensure('file').without_content(%r{db\.auth}) }
         it { is_expected.not_to contain_exec('fix dbpath permissions') }
       end
 
@@ -152,14 +152,24 @@ describe 'mongodb::server' do
         it { is_expected.to contain_file('/root/.mongorc.js') }
       end
 
-      describe 'when specifying set_parameter value' do
+      describe 'when specifying set_parameter array value' do
+        let :params do
+          {
+            set_parameter: ['textSearchEnable=true']
+          }
+        end
+
+        it { is_expected.to contain_file(config_file).with_content(%r{^setParameter:\n  textSearchEnable=true}) }
+      end
+
+      describe 'when specifying set_parameter string value' do
         let :params do
           {
             set_parameter: 'textSearchEnable=true'
           }
         end
 
-        it { is_expected.to contain_file(config_file).with_content(%r{^setParameter: textSearchEnable=true}) }
+        it { is_expected.to contain_file(config_file).with_content(%r{^setParameter:\n  textSearchEnable=true}) }
       end
 
       describe 'with journal:' do
@@ -237,7 +247,7 @@ describe 'mongodb::server' do
 
           it {
             is_expected.to contain_file('/root/.mongorc.js').
-              with_ensure('present').
+              with_ensure('file').
               with_owner('root').
               with_group('root').
               with_mode('0600').
@@ -252,7 +262,7 @@ describe 'mongodb::server' do
             }
           end
 
-          it { is_expected.to contain_file('/root/.mongorc.js').with_ensure('absent') }
+          it { is_expected.to contain_file('/root/.mongorc.js').with_ensure('file').without_content(%r{db\.auth}) }
         end
       end
 

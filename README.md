@@ -161,7 +161,6 @@ and then set the emails later.
 
 Most of the interaction for the server is done via `mongodb::opsmanager`. For
 more options please have a look at [mongodb::opsmanager](#class-mongodbopsmanager).
-There are also some settings that can be configured in `mongodb::globals`.
 
 ## Reference
 
@@ -185,8 +184,6 @@ There are also some settings that can be configured in `mongodb::globals`.
 * `mongodb::mongos::config`: Configures Mongos configuration files
 * `mongodb::mongos::install`: Install Mongos software packages
 * `mongodb::mongos::service`: Manages Mongos service
-* `mongodb::opsmanager::install` : Install Ops Manager software package
-* `mongodb::opsmanager::service` : Manages Ops Manager (mongodb-mms) service
 
 #### Class: mongodb::globals
 *Note:* most server specific defaults should be overridden in the `mongodb::server`
@@ -500,7 +497,7 @@ textSearchEnabled=true). Default: None
 ##### `syslog`
 Sends all logging output to the host’s syslog system rather than to standard
 output or a log file. Default: None
-*Important*: You cannot use syslog with logpath.
+*Important*: You cannot use syslog with logpath. Set logpath to false to disable it.
 
 ##### `slave`
 Set to true to configure the current instance to act as slave instance in a
@@ -652,23 +649,10 @@ For more information please refer to [MongoDB Authentication Process](http://doc
 Plain-text user password (will be hashed)
 
 ##### `roles`
-Array with user roles. Default: ['dbAdmin']
-
-##### `opsmanager_url`
-The fully qualified url where opsmanager runs. Must include the port. Ex:
-'http://opsmanager.yourdomain.com:8080'
-
-##### `opsmanager_mongo_uri`
-Full URI where the Ops Manager application mongodb server(s) can be found. Default: 'mongodb://127.0.0.1:27017'
-
-##### `ca_file`
-Ca file for secure connection to backup agents.
-
-##### `pem_key_file`
-Pem key file containing the cert and private key used for secure connections to backup agents.
-
-##### `pem_key_password`
-The password to the pem key file.
+Array with user roles as string.
+Roles will be granted to user's database if no alternative database is explicitly defined.
+Example: ['dbAdmin', 'readWrite@other_database']
+Default: ['dbAdmin']
 
 ### Providers
 
@@ -716,7 +700,10 @@ Plaintext password of the user.
 Name of database. It will be created, if not exists.
 
 ##### `roles`
-Array with user roles. Default: ['dbAdmin']
+Array with user roles as string.
+Roles will be granted to user's database if no alternative database is explicitly defined.
+Example: ['dbAdmin', 'readWrite@other_database']
+Default: ['dbAdmin']
 
 ##### `tries`
 The maximum amount of two second tries to wait MongoDB startup. Default: 10

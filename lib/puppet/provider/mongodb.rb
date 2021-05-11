@@ -83,9 +83,9 @@ class Puppet::Provider::Mongodb < Puppet::Provider
       first_ip_in_list = bindip.split(',').first
       ip_real = case first_ip_in_list
                 when '0.0.0.0'
-                  '127.0.0.1'
+                  Facter.value(:fqdn)
                 when %r{\[?::0\]?}
-                  '::1'
+                  Facter.value(:fqdn)
                 else
                   first_ip_in_list
                 end
@@ -173,5 +173,14 @@ class Puppet::Provider::Mongodb < Puppet::Provider
 
   def mongo_26?
     self.class.mongo_26?
+  end
+
+  def self.mongo_4?
+    v = mongo_version
+    !v[%r{^4\.}].nil?
+  end
+
+  def mongo_4?
+    self.class.mongo_4?
   end
 end
