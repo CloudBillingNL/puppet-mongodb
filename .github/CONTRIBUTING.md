@@ -16,8 +16,9 @@ By participating in this project you agree to abide by its terms.
    runs the tests for us. You can also execute them locally. This is explained
    in a later section.
 
-1. Checkout the docs we use to review a module. They provide some guidance for
-   new code that might help you before you submit a pull request.
+1. Checkout [our docs](https://voxpupuli.org/docs/#reviewing-a-module-pr) we
+   use to review a module and the [official styleguide](https://puppet.com/docs/puppet/6.0/style_guide.html).
+   They provide some guidance for new code that might help you before you submit a pull request.
 
 1. Add a test for your change. Only refactoring and documentation
    changes require no new tests. If you are adding functionality
@@ -50,19 +51,34 @@ You can install all needed gems for spec tests into the modules directory by
 running:
 
 ```sh
-bundle install --path .vendor/ --without development --without system_tests --without release
+bundle install --path .vendor/ --without development system_tests release --jobs "$(nproc)"
 ```
 
 If you also want to run acceptance tests:
 
 ```sh
-bundle install --path .vendor/ --without development --with system_tests --without release
+bundle install --path .vendor/ --with system_tests --without development release --jobs "$(nproc)"
 ```
 
 Our all in one solution if you don't know if you need to install or update gems:
 
 ```sh
-bundle install --path .vendor/ --without development --with system_tests --without release; bundle update; bundle clean
+bundle install --path .vendor/ --with system_tests --without development release --jobs "$(nproc)"; bundle update; bundle clean
+```
+
+As an alternative to the `--jobs "$(nproc)` parameter, you can set an
+environment variable:
+
+```sh
+BUNDLE_JOBS="$(nproc)"
+```
+
+### Note for OS X users
+
+`nproc` isn't a valid command unter OS x. As an alternative, you can do:
+
+```sh
+--jobs "$(sysctl -n hw.ncpu)"
 ```
 
 ## Syntax and style
@@ -108,6 +124,21 @@ To run a specific spec test set the `SPEC` variable:
 bundle exec rake spec SPEC=spec/foo_spec.rb
 ```
 
+### Unit tests in docker
+
+Some people don't want to run the dependencies locally or don't want to install
+ruby. We ship a Dockerfile that enables you to run all unit tests and linting.
+You only need to run:
+
+```sh
+docker build .
+```
+
+Please ensure that a docker daemon is running and that your user has the
+permission to talk to it. You can specify a remote docker host by setting the
+`DOCKER_HOST` environment variable. it will copy the content of the module into
+the docker image. So it will not work if a Gemfile.lock exists.
+
 ## Integration tests
 
 The unit tests just check the code runs, not that it does exactly what
@@ -144,7 +175,7 @@ created virtual machines will be in `.vagrant/beaker_vagrant_files`.
 Beaker also supports docker containers. We also use that in our automated CI
 pipeline at [travis-ci](http://travis-ci.org). To use that instead of Vagrant:
 
-```
+```sh
 PUPPET_INSTALL_TYPE=agent BEAKER_IS_PE=no BEAKER_PUPPET_COLLECTION=puppet5 BEAKER_debug=true BEAKER_setfile=debian9-64{hypervisor=docker} BEAKER_destroy=yes bundle exec rake beaker
 ```
 
