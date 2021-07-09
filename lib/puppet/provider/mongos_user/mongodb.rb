@@ -99,7 +99,7 @@ Puppet::Type.type(:mongos_user).provide(:mongodb, :parent => Puppet::Provider::M
     unless revoke.empty?
       mongo_eval("db.getSiblingDB(#{@resource[:database].to_json}).revokeRolesFromUser(#{@resource[:username].to_json}, #{role_hashes(revoke, @resource[:database]).to_json})", 'admin', 10, 'localhost:27017')
     end
-end
+  end
 
   private
 
