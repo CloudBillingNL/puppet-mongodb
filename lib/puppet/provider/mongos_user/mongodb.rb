@@ -72,7 +72,7 @@ Puppet::Type.type(:mongos_user).provide(:mongodb, :parent => Puppet::Provider::M
       digestPassword: false
     }
 
-    mongo_eval("db.runCommand(#{command.to_json})", @resource[:database], 'admin', 10, 'localhost:27017')))
+    mongo_eval("db.runCommand(#{command.to_json})", @resource[:database], 'admin', 10, 'localhost:27017')
   end
 
   def password=(value)
@@ -85,19 +85,19 @@ Puppet::Type.type(:mongos_user).provide(:mongodb, :parent => Puppet::Provider::M
         digestPassword: true
       }
 
-      mongo_eval("db.runCommand(#{command.to_json})", @resource[:database], 'admin', 10, 'localhost:27017')))
+      mongo_eval("db.runCommand(#{command.to_json})", @resource[:database], 'admin', 10, 'localhost:27017')
     end
   end
 
   def roles=(roles)
     grant = to_roles(roles, @resource[:database]) - to_roles(@property_hash[:roles], @resource[:database])
     unless grant.empty?
-      mongo_eval("db.getSiblingDB(#{@resource[:database].to_json}).grantRolesToUser(#{@resource[:username].to_json}, #{role_hashes(grant, @resource[:database]).to_json})", 'admin', 10, 'localhost:27017'))
+      mongo_eval("db.getSiblingDB(#{@resource[:database].to_json}).grantRolesToUser(#{@resource[:username].to_json}, #{role_hashes(grant, @resource[:database]).to_json})", 'admin', 10, 'localhost:27017')
     end
 
     revoke = to_roles(@property_hash[:roles], @resource[:database]) - to_roles(roles, @resource[:database])
     unless revoke.empty?
-      mongo_eval("db.getSiblingDB(#{@resource[:database].to_json}).revokeRolesFromUser(#{@resource[:username].to_json}, #{role_hashes(revoke, @resource[:database]).to_json})", 'admin', 10, 'localhost:27017'))
+      mongo_eval("db.getSiblingDB(#{@resource[:database].to_json}).revokeRolesFromUser(#{@resource[:username].to_json}, #{role_hashes(revoke, @resource[:database]).to_json})", 'admin', 10, 'localhost:27017')
     end
 end
 
