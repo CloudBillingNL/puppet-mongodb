@@ -15,12 +15,13 @@ Puppet::Type.type(:mongos_user).provide(:mongodb, :parent => Puppet::Provider::M
       users = JSON.parse mongo_eval('printjson(db.system.users.find().toArray())', db, 10, 'localhost:27017')
 
       allusers += users.collect do |user|
-          new(:name          => user['_id'],
-              :ensure        => :present,
-              :username      => user['user'],
-              :database      => db,
-              :roles         => user['roles'].sort,
-              :password_hash => user['pwd'])
+        new(name: user['_id'],
+            ensure: :present,
+            username: user['user'],
+            database: db,
+            roles: from_roles(user['roles'], user['db']),
+            password_hash: user['credentials']['MONGODB-CR'],
+            scram_credentials: user['credentials']['SCRAM-SHA-1'])
       end
     end
 
@@ -40,28 +41,13 @@ Puppet::Type.type(:mongos_user).provide(:mongodb, :parent => Puppet::Provider::M
   mk_resource_methods
 
   def create
-    if mongo_24?
-      user = {
-        :user => @resource[:username],
-        :pwd => @resource[:password_hash],
-        :roles => to_roles(@resource[:roles])
-      }
+    user = {
+      :user => @resource[:username],
+      :pwd => @resource[:password_hash],
+      :roles => to_roles(@resource[:roles])
+    }
 
-      mongo_eval("db.addUser(#{user.to_json})", @resource[:database], 10, 'localhost:27017')
-    else
-      Puppet.warning "Creating User"
-      cmd_json=<<-EOS.gsub(/^\s*/, '').gsub(/$\n/, '')
-      {
-        "createUser": "#{@resource[:username]}",
-        "pwd": "#{@resource[:password_hash]}",
-        "customData": {"createdBy": "Puppet Mongodb_user['#{@resource[:name]}']"},
-        "roles": #{to_roles(@resource[:roles]).to_json},
-        "digestPassword": false
-      }
-      EOS
-
-      mongo_eval("db.runCommand(#{cmd_json})", @resource[:database], 10, 'localhost:27017')
-    end
+    mongo_eval("db.addUser(#{user.to_json})", @resource[:database], 10, 'localhost:27017')
 
     @property_hash[:ensure] = :present
     @property_hash[:username] = @resource[:username]

@@ -1,8 +1,7 @@
-require 'securerandom'
-require 'base64'
-
-Puppet::Type.newtype(:mongos_user) do
-  @doc = 'Manage a Mongos user. This includes management of users password as well as privileges.'
+require File.expand_path(File.join(File.dirname(__FILE__), '..', 'util', 'mongodb_md5er'))
+require File.expand_path(File.join(File.dirname(__FILE__), '..', 'util', 'mongodb_scram'))
+Puppet::Type.newtype(:mongodb_user) do
+  @doc = 'Manage a MongoDB cluster user. This includes management of users password as well as privileges.'
 
   ensurable
 
@@ -12,73 +11,91 @@ Puppet::Type.newtype(:mongos_user) do
     self[:roles] = Array(self[:roles]).sort!
   end
 
-  newparam(:name, :namevar=>true) do
-    desc "The name of the resource."
+  newparam(:name, namevar: true) do
+    desc 'The name of the resource.'
   end
 
   newproperty(:username) do
-    desc "The name of the user."
+    desc 'The name of the user.'
     defaultto { @resource[:name] }
   end
 
   newproperty(:database) do
     desc "The user's target database."
     defaultto do
-      fail("Parameter 'database' must be set") if provider.database == :absent
+      raise Puppet::Error, "Parameter 'database' must be set" if provider.database == :absent
     end
-    newvalues(/^[\w-]+$/)
+    newvalues(%r{^[\w-]+$})
   end
 
   newparam(:tries) do
-    desc "The maximum amount of two second tries to wait MongoDB startup."
+    desc 'The maximum amount of two second tries to wait MongoDB startup.'
     defaultto 10
-    newvalues(/^\d+$/)
+    newvalues(%r{^\d+$})
     munge do |value|
       Integer(value)
     end
   end
 
-  newproperty(:roles, :array_matching => :all) do
+  newproperty(:roles, array_matching: :all) do
     desc "The user's roles."
     defaultto ['dbAdmin']
-    newvalue(/^\w+(|@[\w-]+)$/)
+    newvalue(%r{^\w+(@\w+)?$})
 
     # Pretty output for arrays.
     def should_to_s(value)
       value.inspect
     end
 
-    def is_to_s(value)
+    def to_s?(value)
       value.inspect
     end
   end
 
   newproperty(:password_hash) do
-    desc "The password hash of the user. Use mongodb_password() for creating hash."
+    desc 'The password hash of the user. Use mongodb_password() for creating hash. Only available on MongoDB 3.0 and later.'
     defaultto do
-      fail("Property 'password_hash' must be set. Use mongodb_password() for creating hash.") if provider.database == :absent
+      if @resource[:password].nil?
+        raise Puppet::Error, "Property 'password_hash' must be set. Use mongodb_password() for creating hash." if provider.database == :absent
+      end
     end
+    newvalue(%r{^\w+$})
 
     def insync?(is)
-      digest = OpenSSL::Digest::SHA1.new.freeze
-
-      # SaltedPassword  := Hi(Normalize(password), salt, i)
-      salted_password = OpenSSL::PKCS5.pbkdf2_hmac_sha1(
-        should,
-        Base64.strict_decode64(is['salt']),
-        is['iterationCount'],
-        digest.size
-      )
-
-      # ClientKey       := HMAC(SaltedPassword, "Client Key")
-      client_key = OpenSSL::HMAC.digest(digest, salted_password, "Client Key")
-
-      # StoredKey       := H(ClientKey)
-      stored_key = digest.digest(client_key)
-
-      return Base64.strict_encode64(stored_key) == is['storedKey']
+      # check if computed keys from password_hash, salt and iterations
+      # match the keys of the existing user
+      if is == :absent && @resource.provider.scram_credentials
+        scram = @resource.provider.scram_credentials
+        scram_util = Puppet::Util::MongodbScram.new(should, scram['salt'], scram['iterationCount'])
+        if scram['storedKey'] == scram_util.stored_key && scram['serverKey'] == scram_util.server_key
+          is = should
+        end
+      end
+      should == is
     end
-    newvalue(/^\w+$/)
+  end
+
+  newproperty(:password) do
+    desc 'The plaintext password of the user.'
+    # magic should/is comparison because mongo only returns hashes, but can only
+    # consume plaintext on pre-3.0
+    def should_to_s(value = @should)
+      # Why is this an array sometimes? Ubuntu 14.04...
+      value = value.first if value.is_a? Array
+      Puppet::Util::MongodbMd5er.md5(@resource[:username], value)
+    end
+
+    def to_s?(_value = @is)
+      @resource.provider.password_hash
+    end
+
+    def insync?(_is)
+      should_to_s == to_s?
+    end
+  end
+
+  newproperty(:scram_credentials) do
+    desc 'The SCRAM-SHA-1 credentials of a user. These are read only and change when password or password_hash changes.'
   end
 
   autorequire(:package) do
@@ -86,6 +103,21 @@ Puppet::Type.newtype(:mongos_user) do
   end
 
   autorequire(:service) do
-    'mongodb'
+    %w[mongodb mongod]
+  end
+
+  autorequire(:mongodb_database) do
+    self[:database]
+  end
+
+  validate do
+    if self[:password_hash].nil? && self[:password].nil? && provider.password.nil? && provider.password_hash.nil?
+      err("Either 'password_hash' or 'password' should be provided")
+    elsif !self[:password_hash].nil? && !self[:password].nil?
+      err("Only one of 'password_hash' or 'password' should be provided")
+    end
+    if should(:scram_credentials)
+      raise("The parameter 'scram_credentials' is read-only and cannot be changed")
+    end
   end
 end
