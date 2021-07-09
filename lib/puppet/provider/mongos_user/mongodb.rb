@@ -60,11 +60,7 @@ Puppet::Type.type(:mongos_user).provide(:mongodb, :parent => Puppet::Provider::M
 
 
   def destroy
-    if mongo_24?
-      mongo_eval("db.removeUser('#{@resource[:username]}')", 'admin', 10, 'localhost:27017')
-    else
-      mongo_eval("db.dropUser('#{@resource[:username]}')", 'admin', 10, 'localhost:27017')
-    end
+    mongo_eval("db.dropUser('#{@resource[:username]}')", 'admin', 10, 'localhost:27017')
   end
 
   def exists?
@@ -83,18 +79,14 @@ Puppet::Type.type(:mongos_user).provide(:mongodb, :parent => Puppet::Provider::M
   end
 
   def roles=(roles)
-    if mongo_24?
-      mongo_eval("db.system.users.update({user:'#{@resource[:username]}'}, { $set: {roles: #{to_roles(@resource[:roles]).to_json}}})", 'admin', 10, 'localhost:27017')
-    else
-      grant = roles-@property_hash[:roles]
-      if grant.length > 0
-        mongo_eval("db.getSiblingDB('#{@resource[:database]}').grantRolesToUser('#{@resource[:username]}', #{to_roles(grant).to_json})", 'admin', 10, 'localhost:27017')
-      end
+    grant = roles-@property_hash[:roles]
+    if grant.length > 0
+      mongo_eval("db.getSiblingDB('#{@resource[:database]}').grantRolesToUser('#{@resource[:username]}', #{to_roles(grant).to_json})", 'admin', 10, 'localhost:27017')
+    end
 
-      revoke = @property_hash[:roles]-roles
-      if revoke.length > 0
-        mongo_eval("db.getSiblingDB('#{@resource[:database]}').revokeRolesFromUser('#{@resource[:username]}', #{to_roles(revoke).to_json})", 'admin', 10, 'localhost:27017')
-      end
+    revoke = @property_hash[:roles]-roles
+    if revoke.length > 0
+      mongo_eval("db.getSiblingDB('#{@resource[:database]}').revokeRolesFromUser('#{@resource[:username]}', #{to_roles(revoke).to_json})", 'admin', 10, 'localhost:27017')
     end
   end
 
