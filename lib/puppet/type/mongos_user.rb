@@ -1,6 +1,6 @@
 require File.expand_path(File.join(File.dirname(__FILE__), '..', 'util', 'mongodb_md5er'))
 require File.expand_path(File.join(File.dirname(__FILE__), '..', 'util', 'mongodb_scram'))
-Puppet::Type.newtype(:mongodb_user) do
+Puppet::Type.newtype(:mongos_user) do
   @doc = 'Manage a MongoDB cluster user. This includes management of users password as well as privileges.'
 
   ensurable
