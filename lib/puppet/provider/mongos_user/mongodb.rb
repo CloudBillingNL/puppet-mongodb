@@ -7,25 +7,18 @@ Puppet::Type.type(:mongos_user).provide(:mongodb, :parent => Puppet::Provider::M
 
   def self.instances
     require 'json'
-    dbs = JSON.parse mongo_eval('printjson(db.getMongo().getDBs()["databases"].map(function(db){return db["name"]}))', 'admin', 10, 'localhost:27017') || 'admin'
 
-    allusers = []
+    users = JSON.parse mongo_eval('printjson(db.system.users.find().toArray())', 'admin', 10, 'localhost:27017')
 
-    dbs.each do |db|
-      users = JSON.parse mongo_eval('printjson(db.system.users.find().toArray())', db, 10, 'localhost:27017')
-
-      allusers += users.collect do |user|
-        new(name: user['_id'],
-            ensure: :present,
-            username: user['user'],
-            database: db,
-            roles: from_roles(user['roles'], user['db']),
-            password_hash: user['credentials']['MONGODB-CR'],
-            scram_credentials: user['credentials']['SCRAM-SHA-1'])
-      end
+    users.map do |user|
+      new(name: user['_id'],
+          ensure: :present,
+          username: user['user'],
+          database: user['db'],
+          roles: from_roles(user['roles'], user['db']),
+          password_hash: user['credentials']['MONGODB-CR'],
+          scram_credentials: user['credentials']['SCRAM-SHA-1'])
     end
-
-    return allusers
   end
 
   # Assign prefetched users based on username and database, not on id and name
