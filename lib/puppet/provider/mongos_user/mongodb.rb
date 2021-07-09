@@ -1,7 +1,7 @@
 require File.expand_path(File.join(File.dirname(__FILE__), '..', 'mongodb'))
 Puppet::Type.type(:mongos_user).provide(:mongodb, :parent => Puppet::Provider::Mongodb) do
 
-  desc "Manage users for a Mongos database."
+  desc "Manage users for a MongoDB cluster."
 
   defaultfor :kernel => 'Linux'
 
@@ -34,60 +34,78 @@ Puppet::Type.type(:mongos_user).provide(:mongodb, :parent => Puppet::Provider::M
   mk_resource_methods
 
   def create
-    user = {
-      :user => @resource[:username],
-      :pwd => @resource[:password_hash],
-      :roles => to_roles(@resource[:roles])
+    password_hash = @resource[:password_hash]
+    if !password_hash && @resource[:password]
+      password_hash = Puppet::Util::MongodbMd5er.md5(@resource[:username], @resource[:password])
+    end
+
+    command = {
+      createUser: @resource[:username],
+      pwd: password_hash,
+      customData: {
+        createdBy: "Puppet Mongodb_user['#{@resource[:name]}']"
+      },
+      roles: role_hashes(@resource[:roles], @resource[:database]),
+      digestPassword: false
     }
 
-    mongo_eval("db.addUser(#{user.to_json})", @resource[:database], 10, 'localhost:27017')
+    if mongo_4?
+      # SCRAM-SHA-256 requires digestPassword to be true.
+      command[:mechanisms] = ['SCRAM-SHA-1']
+    end
 
-    @property_hash[:ensure] = :present
-    @property_hash[:username] = @resource[:username]
-    @property_hash[:database] = @resource[:database]
-    @property_hash[:password_hash] = ''
-    @property_hash[:roles] = @resource[:roles]
-
-    exists? ? (return true) : (return false)
+    mongo_eval("db.runCommand(#{command.to_json})", @resource[:database], 10, 'localhost:27017')
   end
 
-
   def destroy
-    mongo_eval("db.dropUser('#{@resource[:username]}')", 'admin', 10, 'localhost:27017')
+    mongo_eval("db.dropUser(#{@resource[:username].to_json})", "admin", 10, 'localhost:27017')
   end
 
   def exists?
-    !(@property_hash[:ensure] == :absent or @property_hash[:ensure].nil?)
+    !(@property_hash[:ensure] == :absent || @property_hash[:ensure].nil?)
   end
 
-  def password_hash=(value)
-    cmd_json=<<-EOS.gsub(/^\s*/, '').gsub(/$\n/, '')
-    {
-        "updateUser": "#{@resource[:username]}",
-        "pwd": "#{@resource[:password_hash]}",
-        "digestPassword": false
+  def password_hash=(_value)
+    command = {
+      updateUser: @resource[:username],
+      pwd: @resource[:password_hash],
+      digestPassword: false
     }
-    EOS
-    mongo_eval("db.runCommand(#{cmd_json})", @resource[:database], 10, 'localhost:27017')
+
+    mongo_eval("db.runCommand(#{command.to_json})", @resource[:database], 'admin', 10, 'localhost:27017')))
+  end
+
+  def password=(value)
+    if mongo_26?
+      mongo_eval("db.changeUserPassword(#{@resource[:username].to_json}, #{value.to_json})", @resource[:database])
+    else
+      command = {
+        updateUser: @resource[:username],
+        pwd: @resource[:password],
+        digestPassword: true
+      }
+
+      mongo_eval("db.runCommand(#{command.to_json})", @resource[:database], 'admin', 10, 'localhost:27017')))
+    end
   end
 
   def roles=(roles)
-    grant = roles-@property_hash[:roles]
-    if grant.length > 0
-      mongo_eval("db.getSiblingDB('#{@resource[:database]}').grantRolesToUser('#{@resource[:username]}', #{to_roles(grant).to_json})", 'admin', 10, 'localhost:27017')
+    grant = to_roles(roles, @resource[:database]) - to_roles(@property_hash[:roles], @resource[:database])
+    unless grant.empty?
+      mongo_eval("db.getSiblingDB(#{@resource[:database].to_json}).grantRolesToUser(#{@resource[:username].to_json}, #{role_hashes(grant, @resource[:database]).to_json})", 'admin', 10, 'localhost:27017'))
     end
 
-    revoke = @property_hash[:roles]-roles
-    if revoke.length > 0
-      mongo_eval("db.getSiblingDB('#{@resource[:database]}').revokeRolesFromUser('#{@resource[:username]}', #{to_roles(revoke).to_json})", 'admin', 10, 'localhost:27017')
+    revoke = to_roles(@property_hash[:roles], @resource[:database]) - to_roles(roles, @resource[:database])
+    unless revoke.empty?
+      mongo_eval("db.getSiblingDB(#{@resource[:database].to_json}).revokeRolesFromUser(#{@resource[:username].to_json}, #{role_hashes(revoke, @resource[:database]).to_json})", 'admin', 10, 'localhost:27017'))
     end
-  end
+end
 
   private
 
   def self.from_roles(roles, db)
     roles.map do |entry|
-      if entry['db'] == db
+      if entry['db'].empty? || entry['db'] == db
         entry['role']
       else
         "#{entry['role']}@#{entry['db']}"
@@ -95,13 +113,28 @@ Puppet::Type.type(:mongos_user).provide(:mongodb, :parent => Puppet::Provider::M
     end.sort
   end
 
-  def to_roles(roles)
-    roles.map do |role|
-      parts = role.split('@')
-      if parts.count < 2
-        role
+  def to_roles(roles, db)
+    roles.map do |entry|
+      if entry.include? '@'
+        entry
       else
-        { "role" => parts[0], "db" => parts[1] }
+        "#{entry}@#{db}"
+      end
+    end
+  end
+
+  def role_hashes(roles, db)
+    roles.sort.map do |entry|
+      if entry.include? '@'
+        {
+          'role' => entry.gsub(%r{^(.*)@.*$}, '\1'),
+          'db'   => entry.gsub(%r{^.*@(.*)$}, '\1')
+        }
+      else
+        {
+          'role' => entry,
+          'db'   => db
+        }
       end
     end
   end
